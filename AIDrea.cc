@@ -23,44 +23,14 @@ struct PLAYER_NAME : public Player {
     
     map <int, City> cities;
     map <int, Path> paths;
-    
-    typedef vector <int> node;
-    typedef vector <node> graph;
+    vector <vector <int> > count_c;
+    vector <vector <int> > count_p;
 
     vector <Pos> fpos; //posició on han d'anar els MEUS orks, si es -1, es d'altres players
-    vector <queue <Pos> > ways; //cua amb les direccions que han de seguir calculat pel bfs
+    vector <queue <Dir> > ways; //cua amb les direccions que han de seguir calculat pel bfs
     typedef vector < vector<bool> > matrix_bool;
 
-    void move (int id_ork, const Pos & fp) {
-        Unit ork = unit (id_ork);
-        Dir next = NONE;
-        if (fp.i < ork.pos.i ) next = TOP;
-        if (fp.i > ork.pos.i) next = BOTTOM;
-        if (fp.j < ork.pos.j) next = LEFT;
-        if (fp.j > ork.pos.j) next = RIGHT;
-        //cerr << next << endl;
-        if (dir_ok(next)) {
-            ork.pos += next;
-            if (pos_ok(ork.pos)) execute(Command(id_ork, next));
-        }
-        return;
-        
-    }
-    void move2 (int id_ork, const Pos & fp) {
-        Unit ork = unit (id_ork);
-        Dir next = NONE;
-        if (ork.pos.i < fp.i) next = BOTTOM;
-        else if(ork.pos.i > fp.i) next = TOP;
-        else if (ork.pos.j < fp.j) next = RIGHT;
-        else if (ork.pos.j > fp.j) next = LEFT;
-        //cerr << next << endl;
-        if (next != NONE and dir_ok(next)) {
-            ork.pos += next;
-            if (pos_ok(ork.pos)) execute(Command(id_ork, next));
-        }
-        return;
-        
-    }
+    
     //Find cities and paths of the board
     void find_c_p () {
         Cell c;
@@ -85,70 +55,54 @@ struct PLAYER_NAME : public Player {
     
     
 
-    void bfs (const Pos & upos, Pos & fp, queue<Pos> & qq) {
-        //cerr << "inici bfs" << endl;
+    void bfs(const Pos &upos, Pos &fp, queue<Dir> &qq){
         matrix_bool visited(rows(), vector <bool> (cols(), false));
-        
-        queue <pair<Pos, queue <Pos> > > q;
-
-        pair <Pos, queue <Pos> > p = {upos, queue <Pos>()};
-        //p.second.push(NONE);
-        q.push(p);
+        queue<pair<Pos, queue<Dir> > > q;
+        q.push({upos, queue <Dir>()});
         bool found = false;
-        visited[p.first.i][p.first.j] = true;
-        
-        while (not q.empty() and not found) {
-            p = q.front();
+        visited[upos.i][upos.j] = true;
+
+        while (not q.empty() and not found){
+            pair <Pos, queue <Dir> > p = q.front();
             q.pop();
-            
-            
-            /*if (not visited[p.first.i][p.first.j]) {
-                visited[p.first.i][p.first.j] = true;*/
-                
-                for (int i = 0; i < 4 and not found; ++i) {                    
-                    
 
-                    Pos pd = p.first + Dir(i);
-                    
-                    
-                    if (not visited[pd.i][pd.j]) {
-                        Cell c = cell(pd);
-                        
-                        
-                        if (c.type != WATER) {
-                            p.second.push(p.first);
+            for (int i = 0; i < 4 and not found; ++i){
+                queue<Dir> q2 = p.second;
+                Pos pd = p.first + Dir(i);
 
-                            p.first = pd;
-                            
-                            q.push(p);
-                            visited[pd.i][pd.j] = true;
-                            if (c.type == CITY or c.type == PATH) {
-                                found = true;
-                                fp = pd;
-                                qq = p.second;
+                if (not visited[pd.i][pd.j]){
+                    Cell c = cell(pd);
 
+                    if (c.type != WATER){
+                        q2.push(Dir(i));
+                        q.push({pd, q2});
+                        visited[pd.i][pd.j] = true;
+
+                        if (c.type == CITY or c.type == PATH){
+                            found = true;
+                            fp = pd;
+                            qq = q2;
                         }
                     }
                 }
-            
-        }
-
-        
-     }   //cerr << "final bfs" << endl;
+            }
+        }        
     }
-
+/*
     void cities_paths_un () {
         map<int,City>::iterator itc;
         map<int,Path>::iterator itp;
         itc = cities.begin();
         itp = paths.begin();
         int count_c = 0;
-
+        vector <int> city_count (nb_cities());
         while(itc != cities.end()){
-            
-        }
-    }
 
+        }
+    }*/
+    double distancia (const Pos & ap, const Pos & fp) {
+        return sqrt(((ap.i + fp.i)^2) + ((ap.j + fp.j)^2));
+    }
     /**
     * Types and attributes for your player can be defined here.
     */
@@ -160,64 +114,28 @@ struct PLAYER_NAME : public Player {
 
     virtual void play () {
         vector <int> my_orks = orks(me());
-        /*for (int i = 0; i < int(my_orks.size()); ++i) {
-            Unit u = unit (my_orks[i])
-            move (my_orks[i]);
-        }*/
+
         //buscar ciutats
         if (round() == 0) {
             find_c_p();
             fpos = vector<Pos> (nb_units(),{0,0});
-            ways = vector <queue <Pos> > (nb_units());
-
-            /*map<int, City>::iterator itc;
-            itc = cities.begin();
-            map<int, Path>::iterator itp = paths.begin();
-            for (itc = cities.begin(); itc != cities.end(); ++itc) {
-                cerr << "City with id: " << (*itc).first << " at " << itc->second[1] << endl;
+            ways = vector <queue <Dir> > (nb_units());
+            count_c = vector <vector <int> > (nb_cities());
+            count_p = vector <vector <int> > (nb_paths());
+            vector <Pos> ccc = paths[0].second;
+            cerr << "Path 0: ";
+            for(int i = 0; i < int(ccc.size()); ++i) {
+                cerr << ccc[i] << ' ';
             }
-            for (itp = paths.begin(); itp != paths.end(); ++itp) {
-                cerr << "Path with id: " << (*itp).first;
-                cerr << " connects " << (*itp).second.first.first << " and " << (*itp).second.first.second << endl;
-             }*/
-            cerr <<"inici busqueda "; 
-            for (int i = 0; i < int(my_orks.size()); ++i) {
-                
-                Unit u = unit(my_orks[i]);
-        
+
+
+            for (int id_ork : my_orks){
+                Unit u = unit(id_ork);
                 bfs(u.pos, fpos[u.id], ways[u.id]);
-                cerr << u.id << " ha trobat ciutat o cami" << endl;
-                
-            
-            }
-            //cerr << "Ork " << my_orks[0] << " must do this way: ";
-            /*for (queue<Dir>::iterator it = ways[0].begin(); it != ways.end(); it++) {
-                cerr << *it << ' ';
-
-            }*/
-            cerr << my_orks[0] << " ha de fer la ruta: ";
-            queue<Pos> example = ways[my_orks[0]];
-            while(not example.empty())
-             {
-                cerr << example.front() << ' ';
-                example.pop();
-            }
-            cerr << endl;
-            
-            
-            /*cerr << "cami a seguir per l'ork " << o.id << " a la pos "<< o.pos << " es:";
-            for(list<Pos>::iterator it = way.begin(); it != way.end(); ++it) {
-                cerr << *it << ' ';
-            }
-            cerr << endl;*/
-            for (int i = 0; i < int(my_orks.size()); ++i) {
-                Unit u = unit(my_orks[i]);
-                Cell cc = cell (fpos[u.id]);
-                cerr << "ork at " << u.pos << "have to go to: " << fpos[u.id] << "which is a " << cc.type << endl;
-                }    
+            }    
             
         }
-        
+
         if (round() != 0) {
             
             for (int i = 0; i < int(my_orks.size()); ++i) {
@@ -226,43 +144,38 @@ struct PLAYER_NAME : public Player {
             }
         }
 
+       for (int id_ork : my_orks){
 
-        /*for (int i = 0; i < int(my_orks.size()); ++i) {
-            Unit u = unit(my_orks[i]);
-            Cell c = cell(u.pos);
-            if (c == CITY) {
-
-
+            if (not ways[id_ork].empty()){;
+                execute(Command(id_ork, ways[id_ork].front()));
+                ways[id_ork].pop();
             }
-        }*/
+            else {
+                Unit u = unit (id_ork);
+                Cell c = cell(u.pos);
+                if (c.type == CITY) count_c[c.city_id].push_back(id_ork);
+                if (c.type == PATH) count_p[c.path_id].push_back(id_ork);
+            }
+        }
 
         /*
-        for (int i = 0; i < int(my_orks.size()); ++i) {
-            Unit u = unit (my_orks[i]);
-            move2(u.id, fpos[u.id]);
-        }*/
-        cerr << "my orks are :" << endl;
-        for(int i = 0; i < int(my_orks.size()); ++i) {
-            int id_ork = my_orks[i];
-            cerr << id_ork << ' ';
-            Unit u = unit (id_ork);
+        for (int i = 0; i < nb_cities; ++i) {
+            for(int j = 1; j < int(count_c[i].size()); ++j)
+                if(count_c[i].size() > 1) { //hi ha mes de un orco
+                    int id_move = count_c[i][j];
 
-            if (fpos[id_ork] != u.pos){
-                //Dir dd = p_to_d(ways[id_ork].front(), u.pos);
-                cerr << ways[id_ork].front() << ' ' << u.pos ;
-                
-                //cerr << "direction of " << id_ork << " is " << dd;
-                
-                move(id_ork, ways[id_ork].front());
-                ways[id_ork].pop();
-                cerr << " done";   
-            }
-            if (my_orks.size() != 0) {
-                u = unit(id_ork);
-                cerr << "and it's at " << u.pos  << " with health " << u.health << endl;
-            }
-            else cerr << "All my orks died" << endl;
+                }
         }
+
+
+        for(int i = 0; i < nb_paths(); ++i) {
+            for(int j = 1; j < int(count_c[i].size()); ++j){
+                int id_move = count_p[i][j];
+                Unit move = unit(id_move);
+                int a = distancia()
+            }
+            
+        }*/
         cerr << "cpu using: " << status(me()) << endl;
         
 
